@@ -250,36 +250,71 @@ def process_video_file(mp4_path, bbox_dir=None):
             frames.append(frame)
 
         for frame_idx,full_frame in enumerate(frames):
-         
+            # h, w = full_frame.shape[0], full_frame.shape[1]
+            # oroginal_frame = full_frame.copy()
             if bbox_dir is not None:
                 face = full_frame[int(bboxes[frame_idx][1]):int(bboxes[frame_idx][3]), int(bboxes[frame_idx][0]):int(bboxes[frame_idx][2]), :].copy()
+                # full_frame[:, :, :] = 0
+                # full_frame[int(bboxes[frame_idx][1]):int(bboxes[frame_idx][3]), int(bboxes[frame_idx][0]):int(bboxes[frame_idx][2]), :] = face
                 h, w = face.shape[0], face.shape[1]
-               
             results = face_mesh.process(cv2.cvtColor(face, cv2.COLOR_BGR2RGB))
-
             if not results.multi_face_landmarks:
                 continue  # not detect
-            ### RESIZE TO 256
-            face_frame=cv2.resize(face,(256,256))
-
-
             face_landmarks=results.multi_face_landmarks[0]
 
+            #(1)normalize landmarks
+            x_min=999
+            x_max=-999
+            y_min=999
+            y_max=-999
             pose_landmarks, content_landmarks = [], []
-            
             for idx, landmark in enumerate(face_landmarks.landmark):
+                if idx in all_landmark_idx:
+                    if landmark.x<x_min:
+                        x_min=landmark.x
+                    if landmark.x>x_max:
+                        x_max=landmark.x
 
+                    if landmark.y<y_min:
+                        y_min=landmark.y
+                    if landmark.y>y_max:
+                        y_max=landmark.y
+                ######
                 if idx in pose_landmark_idx:
                     pose_landmarks.append((idx,landmark.x,landmark.y))
                 if idx in content_landmark_idx:
                     content_landmarks.append((idx,landmark.x,landmark.y))
+            ##########plus 5 pixel to size##########
+            x_min=max(x_min-5/w,0)
+            x_max = min(x_max + 5 / w, 1)
+            #
+            y_min = max(y_min - 5 / h, 0)
+            y_max = min(y_max + 5 / h, 1)
+            face_frame=cv2.resize(face[int(y_min*h):int(y_max*h),int(x_min*w):int(x_max*w)],(256,256))
 
-            # for idx,x,y in pose_landmarks + content_landmarks:
-            #     face_landmarks.landmark[idx].x=x
-            #     face_landmarks.landmark[idx].y=y
+            # update landmarks
+            pose_landmarks=[ \
+                (idx,(x-x_min)/(x_max-x_min),(y-y_min)/(y_max-y_min)) for idx,x,y in pose_landmarks]
+            content_landmarks=[\
+                (idx, (x - x_min) / (x_max - x_min), (y - y_min) / (y_max - y_min)) for idx, x, y in content_landmarks]
+            # update drawed landmarks
+            for idx,x,y in pose_landmarks + content_landmarks:
+                face_landmarks.landmark[idx].x=x
+                face_landmarks.landmark[idx].y=y
+            #save landmarks
+            result_dict={}
+            result_dict['pose_landmarks']=pose_landmarks
+            result_dict['content_landmarks']=content_landmarks
+            # out_dir = os.path.join(output_landmark_root, '/'.join(mp4_path[:-4].split('/')[-2:]))
+            out_dir = os.path.join(output_landmark_root, os.path.basename(mp4_path).split(".mp4")[0])
+            # print('dir', out_dir) 
+            os.makedirs(out_dir, exist_ok=True)
+            np.save(os.path.join(out_dir,str(frame_idx+1)),result_dict)
 
-
-            annotated_image = np.zeros((h , w , 3))
+            #save sketch
+            h_new=(y_max-y_min)*h
+            w_new = (x_max - x_min) * w
+            annotated_image = np.zeros((int(h_new * 256 / min(h_new, w_new)), int(w_new * 256 / min(h_new, w_new)), 3))
             draw_landmarks(
                 image=annotated_image,
                 landmark_list=face_landmarks,  # FACEMESH_CONTOURS  FACEMESH_LIPS
@@ -287,35 +322,14 @@ def process_video_file(mp4_path, bbox_dir=None):
                 connection_drawing_spec=drawing_spec)  # landmark_drawing_spec=None,
             annotated_image = cv2.resize(annotated_image, (256, 256))
 
-            
+            # out_dir = os.path.join(output_sketch_root, '/'.join(mp4_path[:-4].split('/')[-2:]))
             out_dir = os.path.join(output_sketch_root, os.path.basename(mp4_path).split(".mp4")[0])
 
             os.makedirs(out_dir, exist_ok=True)
             cv2.imwrite(os.path.join(out_dir, str(frame_idx+1)+'.png'), annotated_image)
 
-
-           
-           
-           
-
-           
-            
-            ### NORMALIZE
-            pose_landmarks=[(idx,x / w,y / h) for idx,x,y in pose_landmarks]
-            content_landmarks=[(idx,x / w,y / h) for idx, x, y in content_landmarks]
-            # update drawed landmarks
-           
-            #save landmarks
-            result_dict={}
-            result_dict['pose_landmarks']=pose_landmarks
-            result_dict['content_landmarks']=content_landmarks
-            out_dir = os.path.join(output_landmark_root, os.path.basename(mp4_path).split(".mp4")[0])
-            # print('dir', out_dir)
-            os.makedirs(out_dir, exist_ok=True)
-            np.save(os.path.join(out_dir,str(frame_idx+1)),result_dict)
-
-
-            #save crop face
+            #save face frame
+            # out_dir = os.path.join(output_face_root, '/'.join(mp4_path[:-4].split('/')[-2:]))
             out_dir = os.path.join(output_face_root, os.path.basename(mp4_path).split(".mp4")[0])
             os.makedirs(out_dir, exist_ok=True)
             cv2.imwrite(os.path.join(out_dir, str(frame_idx+1) + '.png'), face_frame)
