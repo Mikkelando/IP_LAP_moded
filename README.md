@@ -54,7 +54,7 @@ CUDA_VISIBLE_DEVICES=0 python preprocess_audio.py --data_root ....../lrs2_video/
 extract the cropped face, landmarks and sketches from video files by running: 
 
 ```
-CUDA_VISIBLE_DEVICES=0 python preprocess_video.py --dataset_video_root ....../lrs2_video/ --output_sketch_root ..../lrs2_sketch --output_face_root ..../lrs2_face --output_landmark_root ..../lrs2_landmarks
+CUDA_VISIBLE_DEVICES=0 python preprocess_video.py --dataset_video_root ....../lrs2_video/ --output_sketch_root ..../lrs2_sketch --output_face_root ..../lrs2_face --output_landmark_root ..../lrs2_landmarks --bbox_dir ..../bboxes
 ```
 
 ### train Landmark generator
