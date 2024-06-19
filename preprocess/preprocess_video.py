@@ -15,9 +15,10 @@ from mediapipe.framework.formats import landmark_pb2
 parser = argparse.ArgumentParser()
 parser.add_argument('--process_num', type=int, default=6) #number of process in ThreadPool to preprocess the dataset
 parser.add_argument('--dataset_video_root', type=str, required=True)
-parser.add_argument('--output_sketch_root', type=str, default='./lrs2_sketch128')
-parser.add_argument('--output_face_root', type=str, default='./lrs2_face128')
+parser.add_argument('--output_sketch_root', type=str, default='./lrs2_sketch256')
+parser.add_argument('--output_face_root', type=str, default='./lrs2_face256')
 parser.add_argument('--output_landmark_root', type=str, default='./lrs2_landmarks')
+parser.add_argument('--bbox_dir', type=str, default='./bboxes')
 
 args = parser.parse_args()
 
@@ -25,6 +26,16 @@ input_mp4_root = args.dataset_video_root
 output_sketch_root = args.output_sketch_root
 output_face_root=args.output_face_root
 output_landmark_root=args.output_landmark_root
+bbox_dir = args.bbox_dir
+
+
+### CREATE FOLDERS
+if not os.path.exists(output_sketch_root):  
+    os.makedirs(output_sketch_root)
+if not os.path.exists(output_face_root):  
+    os.makedirs(output_face_root)
+if not os.path.exists(output_landmark_root):  
+    os.makedirs(output_landmark_root)
 
 
 
@@ -203,7 +214,26 @@ mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
-def process_video_file(mp4_path):
+def process_video_file(mp4_path, bbox_dir=None):
+    '''
+    bbox_path is video_name.txt
+
+    video_name.txt structure:
+        TOP, RIGHT, LEFT, BOTTOM
+        a, b, c, d
+        e, f, g, h
+        ...
+
+    '''
+    if bbox_dir is not None:
+        print('USING BBOX')
+        with open(bbox_dir+f'/{os.path.basename(mp4_path).split(".mp4")[0]}.txt', 'r') as file:
+            rows = file.readlines()
+            bboxes = []
+            for row in rows[1:]:
+                bboxes.append(list(map(float, row.split(','))))
+
+
     with mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1, refine_landmarks=True,
                                min_detection_confidence=0.5) as face_mesh:
         video_stream = cv2.VideoCapture(mp4_path)
@@ -221,6 +251,11 @@ def process_video_file(mp4_path):
 
         for frame_idx,full_frame in enumerate(frames):
             h, w = full_frame.shape[0], full_frame.shape[1]
+            oroginal_frame = full_frame.copy()
+            if bbox_dir is not None:
+                face = full_frame[int(bboxes[frame_idx][1]):int(bboxes[frame_idx][3]), int(bboxes[frame_idx][0]):int(bboxes[frame_idx][2]), :].copy()
+                full_frame[:, :, :] = 0
+                full_frame[int(bboxes[frame_idx][1]):int(bboxes[frame_idx][3]), int(bboxes[frame_idx][0]):int(bboxes[frame_idx][2]), :] = face
             results = face_mesh.process(cv2.cvtColor(full_frame, cv2.COLOR_BGR2RGB))
             if not results.multi_face_landmarks:
                 continue  # not detect
@@ -254,7 +289,7 @@ def process_video_file(mp4_path):
             #
             y_min = max(y_min - 5 / h, 0)
             y_max = min(y_max + 5 / h, 1)
-            face_frame=cv2.resize(full_frame[int(y_min*h):int(y_max*h),int(x_min*w):int(x_max*w)],(128,128))
+            face_frame=cv2.resize(oroginal_frame[int(y_min*h):int(y_max*h),int(x_min*w):int(x_max*w)],(256,256))
 
             # update landmarks
             pose_landmarks=[ \
@@ -276,13 +311,13 @@ def process_video_file(mp4_path):
             #save sketch
             h_new=(y_max-y_min)*h
             w_new = (x_max - x_min) * w
-            annotated_image = np.zeros((int(h_new * 128 / min(h_new, w_new)), int(w_new * 128 / min(h_new, w_new)), 3))
+            annotated_image = np.zeros((int(h_new * 256 / min(h_new, w_new)), int(w_new * 256 / min(h_new, w_new)), 3))
             draw_landmarks(
                 image=annotated_image,
                 landmark_list=face_landmarks,  # FACEMESH_CONTOURS  FACEMESH_LIPS
                 connections=FACEMESH_FULL,
                 connection_drawing_spec=drawing_spec)  # landmark_drawing_spec=None,
-            annotated_image = cv2.resize(annotated_image, (128, 128))
+            annotated_image = cv2.resize(annotated_image, (256, 256))
 
             out_dir = os.path.join(output_sketch_root, '/'.join(mp4_path[:-4].split('/')[-2:]))
             os.makedirs(out_dir, exist_ok=True)
@@ -293,9 +328,9 @@ def process_video_file(mp4_path):
             os.makedirs(out_dir, exist_ok=True)
             cv2.imwrite(os.path.join(out_dir, str(frame_idx) + '.png'), face_frame)
 
-def mp_handler(mp4_path):
+def mp_handler(mp4_path, bbox_dir):
     try:
-        process_video_file(mp4_path)
+        process_video_file(mp4_path, bbox_dir)
     except KeyboardInterrupt:
         exit(0)
     except:
@@ -305,12 +340,16 @@ def mp_handler(mp4_path):
 def main():
     print('looking up videos.... ')
     mp4_list = glob.glob(input_mp4_root + '/*/*.mp4')  #example: .../lrs2_video/5536038039829982468/00001.mp4
+    # mp4_list = glob.glob(input_mp4_root + '*')
     print('total videos :', len(mp4_list))
 
     process_num = args.process_num
     print('process_num: ', process_num)
+    
+
+
     p_frames = ThreadPoolExecutor(process_num)
-    futures_frames = [p_frames.submit(mp_handler, mp4_path) for mp4_path in mp4_list]
+    futures_frames = [p_frames.submit(mp_handler, mp4_path, bbox_dir) for mp4_path in mp4_list]
     _ = [r.result() for r in tqdm(as_completed(futures_frames), total=len(futures_frames))]
     print("complete task!")
 
