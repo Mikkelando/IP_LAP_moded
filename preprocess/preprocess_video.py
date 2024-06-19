@@ -274,9 +274,9 @@ def process_video_file(mp4_path, bbox_dir=None):
                 if idx in content_landmark_idx:
                     content_landmarks.append((idx,landmark.x,landmark.y))
 
-            for idx,x,y in pose_landmarks + content_landmarks:
-                face_landmarks.landmark[idx].x=x
-                face_landmarks.landmark[idx].y=y
+            # for idx,x,y in pose_landmarks + content_landmarks:
+            #     face_landmarks.landmark[idx].x=x
+            #     face_landmarks.landmark[idx].y=y
 
 
             annotated_image = np.zeros((h , w , 3))
@@ -310,7 +310,7 @@ def process_video_file(mp4_path, bbox_dir=None):
             result_dict['pose_landmarks']=pose_landmarks
             result_dict['content_landmarks']=content_landmarks
             out_dir = os.path.join(output_landmark_root, os.path.basename(mp4_path).split(".mp4")[0])
-            print('dir', out_dir)
+            # print('dir', out_dir)
             os.makedirs(out_dir, exist_ok=True)
             np.save(os.path.join(out_dir,str(frame_idx+1)),result_dict)
 
