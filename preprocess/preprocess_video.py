@@ -226,7 +226,7 @@ def process_video_file(mp4_path, bbox_dir=None):
 
     '''
     if bbox_dir is not None:
-        print('USING BBOX')
+        
         with open(bbox_dir+f'/{os.path.basename(mp4_path).split(".mp4")[0]}.txt', 'r') as file:
             rows = file.readlines()
             bboxes = []
@@ -304,9 +304,11 @@ def process_video_file(mp4_path, bbox_dir=None):
             result_dict={}
             result_dict['pose_landmarks']=pose_landmarks
             result_dict['content_landmarks']=content_landmarks
-            out_dir = os.path.join(output_landmark_root, '/'.join(mp4_path[:-4].split('/')[-2:]))
+            # out_dir = os.path.join(output_landmark_root, '/'.join(mp4_path[:-4].split('/')[-2:]))
+            out_dir = os.path.join(output_landmark_root, os.path.basename(mp4_path).split(".mp4")[0])
+            print('dir', out_dir)
             os.makedirs(out_dir, exist_ok=True)
-            np.save(os.path.join(out_dir,str(frame_idx)),result_dict)
+            np.save(os.path.join(out_dir,str(frame_idx+1)),result_dict)
 
             #save sketch
             h_new=(y_max-y_min)*h
@@ -319,14 +321,17 @@ def process_video_file(mp4_path, bbox_dir=None):
                 connection_drawing_spec=drawing_spec)  # landmark_drawing_spec=None,
             annotated_image = cv2.resize(annotated_image, (256, 256))
 
-            out_dir = os.path.join(output_sketch_root, '/'.join(mp4_path[:-4].split('/')[-2:]))
+            # out_dir = os.path.join(output_sketch_root, '/'.join(mp4_path[:-4].split('/')[-2:]))
+            out_dir = os.path.join(output_sketch_root, os.path.basename(mp4_path).split(".mp4")[0])
+
             os.makedirs(out_dir, exist_ok=True)
-            cv2.imwrite(os.path.join(out_dir, str(frame_idx)+'.png'), annotated_image)
+            cv2.imwrite(os.path.join(out_dir, str(frame_idx+1)+'.png'), annotated_image)
 
             #save face frame
-            out_dir = os.path.join(output_face_root, '/'.join(mp4_path[:-4].split('/')[-2:]))
+            # out_dir = os.path.join(output_face_root, '/'.join(mp4_path[:-4].split('/')[-2:]))
+            out_dir = os.path.join(output_face_root, os.path.basename(mp4_path).split(".mp4")[0])
             os.makedirs(out_dir, exist_ok=True)
-            cv2.imwrite(os.path.join(out_dir, str(frame_idx) + '.png'), face_frame)
+            cv2.imwrite(os.path.join(out_dir, str(frame_idx+1) + '.png'), face_frame)
 
 def mp_handler(mp4_path, bbox_dir):
     try:
@@ -339,8 +344,8 @@ def mp_handler(mp4_path, bbox_dir):
 
 def main():
     print('looking up videos.... ')
-    mp4_list = glob.glob(input_mp4_root + '/*/*.mp4')  #example: .../lrs2_video/5536038039829982468/00001.mp4
-    # mp4_list = glob.glob(input_mp4_root + '*')
+    # mp4_list = glob.glob(input_mp4_root + '/*/*.mp4')  #example: .../lrs2_video/5536038039829982468/00001.mp4
+    mp4_list = glob.glob(input_mp4_root + '*')
     print('total videos :', len(mp4_list))
 
     process_num = args.process_num
